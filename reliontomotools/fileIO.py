@@ -8,12 +8,13 @@ import io
 import xmltodict
 from glob import glob
 from transforms3d.euler import euler2mat, mat2euler
+import re
 
 from ._version import __version__
 
 
 __all__ = ['readStarFile', 'writeStarFile', 'WarpXMLHandler',
-           'motlToRelion4'
+           'motlToRelion4', 'relion4ToMotl'
            ]
 
 
@@ -339,3 +340,71 @@ def motlToRelion4(motl, pixelSizeBin1, binning=1, tomoLabel='TS_',
     data = dict()
     data['data_particles'] = datapart
     return data
+
+def getFieldIfExists(dataframe, label):
+
+    if label in dataframe:
+        return dataframe[label]
+    else:
+        return 0
+
+def relion4ToMotl(dataStar, pixelSize, binfactor=1, useTomoAngles=False):
+
+    datapart = dataStar['data_particles']
+
+    binRatio = 1/binfactor
+
+    nPart = len(datapart)
+    motl = np.zeros((nPart, 20))
+
+    if useTomoAngles:
+        rotLabel  = '_rlnTomoSubtomogramRot'
+        tiltLabel = '_rlnTomoSubtomogramTilt'
+        psiLabel  = '_rlnTomoSubtomogramPsi'
+    else:
+        rotLabel  = '_rlnAngleRot'
+        tiltLabel = '_rlnAngleTilt'
+        psiLabel  = '_rlnAnglePsi'
+
+
+    for k in range(nPart):
+        dOnePart = datapart.iloc[k]
+        motlOne = motl[k, :]
+
+        motlOne[3] = int(getFieldIfExists(dOnePart, '_rlnTomoParticleId'))
+        motlOne[5] = int(getFieldIfExists(dOnePart, '_rlnTomoManifoldIndex'))
+        tomoIdx = np.array(int(re.findall('_\d+.', dOnePart['_rlnTomoName'])[0][1:]) )
+        motlOne[6] = tomoIdx
+        motlOne[0] = float(getFieldIfExists(dOnePart, '_rlnMaxValueProbDistribution'))
+        motlOne[19] = int(getFieldIfExists(dOnePart, '_rlnClassNumber'))
+
+        coords = dOnePart[['_rlnCoordinateX',
+                           '_rlnCoordinateY',
+                           '_rlnCoordinateZ']].\
+                            values.astype(float)*binRatio
+        # Subtom shifts are defined opposite to Relion and in pixels
+        shifts = -dOnePart[['_rlnOriginXAngst',
+                           '_rlnOriginYAngst',
+                           '_rlnOriginZAngst']].\
+                            values.astype(float)/pixelSize*binRatio
+
+        # Angles applied to rotate part -> ref (Relion ref.system)
+        angles = dOnePart[[psiLabel,
+                           tiltLabel,
+                           rotLabel]].\
+                            values.astype(float)
+
+        newAngles = np.array(mat2euler(
+                    euler2mat(*(-np.pi/180*angles),
+                              'rzyz'), 'szxz'))*180/np.pi
+
+        # Subtom indexes start from 1
+        shifts += coords + 1
+        coords = np.round(shifts)
+        shifts -= coords
+
+        motlOne[7:10] = coords
+        motlOne[10:13] = shifts
+        motlOne[16:19] = newAngles[[0, 2, 1]]
+
+    return motl

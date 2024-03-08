@@ -28,7 +28,8 @@ setup(
           "console_scripts": [
               f"warptomo2relion = {pkg}.warptomo2relion:warpTomo2RelionProgram",
               f"motl2relion = {pkg}.motl2relion:motl2RelionProgram",
-                             ]
+              f"relion2motl = {pkg}.relion2motl:relion2motlProgram",
+          ]
                    },
       python_requires=">=3.7",
       install_requires=[
