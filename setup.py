@@ -26,10 +26,11 @@ setup(
       license='MIT',
       entry_points={
           "console_scripts": [
-              f"warptomo2relion = {pkg}.warptomo2relion:warpTomo2RelionProgram"
+              f"warptomo2relion = {pkg}.warptomo2relion:warpTomo2RelionProgram",
+              f"motl2relion = {pkg}.motl2relion:motl2RelionProgram",
                              ]
                    },
-      python_requires=">=3.6",
+      python_requires=">=3.7",
       install_requires=[
           'numpy',
           'pandas',
@@ -37,7 +38,9 @@ setup(
           'docopt',
           'scipy',
           'tqdm',
+          'transforms3d',
           'mrcfile',
+          'emfile',
           ]
 
      )

@@ -7,11 +7,14 @@ import numpy as np
 import io
 import xmltodict
 from glob import glob
+from transforms3d.euler import euler2mat, mat2euler
 
 from ._version import __version__
 
 
-__all__ = ['readStarFile', 'writeStarFile', 'WarpXMLHandler']
+__all__ = ['readStarFile', 'writeStarFile', 'WarpXMLHandler',
+           'motlToRelion4'
+           ]
 
 
 def getTable(lines):
@@ -278,3 +281,61 @@ def cleanDir(path):
         except OSError as e:
             print("Error: %s : %s" % (f, e.strerror))
 
+
+def motlToRelion4(motl, pixelSizeBin1, binning=1, tomoLabel='TS_',
+                  padZeros=-1):
+
+    nPart = len(motl)
+
+    labels = ['_rlnTomoName', '_rlnTomoParticleId', '_rlnTomoManifoldIndex',
+              # '_rlnMicrographName',
+              '_rlnCoordinateX', '_rlnCoordinateY', '_rlnCoordinateZ',
+              '_rlnOriginXAngst', '_rlnOriginYAngst', '_rlnOriginZAngst',
+              '_rlnAngleRot', '_rlnAngleTilt', '_rlnAnglePsi',
+              # '_rlnGroupNumber',
+              '_rlnClassNumber']
+    datapart = pd.DataFrame(index=range(nPart), columns=labels)
+
+    if padZeros < 0:
+        tomoNumW = len(str(int(motl[:, 6].max())))
+    else:
+        tomoNumW = padZeros
+
+    for k in range(nPart):
+        dOnePart = datapart.loc[k]
+        motlOne = motl[k, :]
+        partIdx = int(motlOne[3])
+        tomoIdx = int(motlOne[6])
+        tomoName = f'{tomoLabel}{tomoIdx:0{tomoNumW}d}'
+        dOnePart['_rlnTomoName'] = f'{tomoName}'
+        dOnePart['_rlnTomoParticleId'] = f'{partIdx}'
+        dOnePart['_rlnTomoManifoldIndex'] = f'{int(motlOne[5])}'
+        # dOnePart['_rlnMicrographName'] = f'{tomoName}'
+        # dOnePart['_rlnGroupNumber'] = f'{tomoIdx}'
+        dOnePart['_rlnClassNumber'] = f'{int(motlOne[19])}'
+
+        coords = motlOne[7:10].astype(float) - 1
+        shifts = coords + motlOne[10:13].astype(float)
+        shifts = shifts*binning + binning//2
+        coords = np.round(shifts)
+        shifts = -(shifts - coords)*pixelSizeBin1
+        # shifts = -1.*motlOne[10:13].astype(float)*pixelSize
+
+        # Angles applied to rotate part -> ref (Relion ref.system)
+        newAngles = -np.array(mat2euler(
+                    euler2mat(*(np.pi/180*motlOne[[16, 18, 17]]),
+                              'szxz'), 'rzyz'))*180/np.pi
+
+        dOnePart['_rlnCoordinateX'] = f'{int(coords[0])}'
+        dOnePart['_rlnCoordinateY'] = f'{int(coords[1])}'
+        dOnePart['_rlnCoordinateZ'] = f'{int(coords[2])}'
+        dOnePart['_rlnOriginXAngst'] = f'{shifts[0]:.3f}'
+        dOnePart['_rlnOriginYAngst'] = f'{shifts[1]:.3f}'
+        dOnePart['_rlnOriginZAngst'] = f'{shifts[2]:.3f}'
+        dOnePart['_rlnAngleRot'] = f'{newAngles[2]:.2f}'
+        dOnePart['_rlnAngleTilt'] = f'{newAngles[1]:.2f}'
+        dOnePart['_rlnAnglePsi'] = f'{newAngles[0]:.2f}'
+
+    data = dict()
+    data['data_particles'] = datapart
+    return data
