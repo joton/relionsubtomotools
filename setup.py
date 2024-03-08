@@ -30,7 +30,14 @@ setup(
                              ]
                    },
       python_requires=">=3.6",
-      install_requires=['numpy', 'pandas', 'xmltodict', 'docopt',
-                        'scipy', 'mrcfile', 'tqdm']
+      install_requires=[
+          'numpy',
+          'pandas',
+          'xmltodict',
+          'docopt',
+          'scipy',
+          'tqdm',
+          'mrcfile',
+          ]
 
      )
